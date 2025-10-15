@@ -8,6 +8,8 @@ const PORT = process.env.PORT;
 
 app.use("/api/auth", authRoutes);  // Added missing forward slash
 
+app.use(express.json());
+
 app.listen(PORT, (req,res) => {
     console.log(`Server is running on port http://localhost:${PORT}`);
     connectDB();
