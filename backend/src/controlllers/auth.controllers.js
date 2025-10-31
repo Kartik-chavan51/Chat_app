@@ -1,5 +1,8 @@
 import jwt from "jsonwebtoken";
+import { upsertStreamUser } from "../lib/stream.js";
 import User from "../models/User.js";
+
+
 export async function signup(req,res){
 
     res.send("Signup Route");
@@ -39,6 +42,22 @@ export async function signup(req,res){
             profilePic:randomAvator
         });
 
+        
+
+        try {
+            await upsertStreamUser({
+            id:newUser._id.toString(),
+            name:newUser.fullname,
+            image:newUser.profilePic || "",
+        });
+        console.log(`Stream user created for ${newUser.fullname}`);
+            
+        } catch (error) {
+            console.log("Error creating stream user:",error);
+            
+        }
+
+
         const token= jwt.sign({userId:newUser._id},process.env.JWT_SECRET_KEY,{expiresIn:"7d"});
 
         res.cookie("jwt",token,{
@@ -57,9 +76,38 @@ export async function signup(req,res){
 
 
 export async function login(req,res){
-    res.send("Login Route");
+    try {
+        const {email,password}=req.body;
+
+        if(!email || !password){
+            return res.status(400).json({message:"All fields are required"});
+        }
+
+        const user=await User.findOne({ email});
+        if(!user) return res.status(401).json({message:"Incorrect email or password"});
+
+        const isPasswordCorrect=await user.matchPassword(password)
+        if(!isPasswordCorrect) return res.status(401).json({message:"Incorrect email or password"});
+
+        const token= jwt.sign({userId:user._id},process.env.JWT_SECRET_KEY,{expiresIn:"7d"});
+
+        res.cookie("jwt",token,{
+            maxAge:7*24*60*60*1000, //7 days
+            httpOnly:true, //prevent xss attacks
+            sameSite:"Strict",//prevent csrf attacks
+            secure:process.env.NODE_ENV==="production" //only send cookie over https in production
+        })
+
+        res.status(200).json({success:true,user});
+
+    } catch (error) {
+        console.log("Error in login",error.message);
+        res.status(500).json({message:"Interna; Server Error"});
+        
+    }
 }
 
 export function logout(req,res){
-    res.send("Logout Route");
+    res.clearCookie("jwt");
+    res.status(200).json({success:true,message:"Logged out successfully"});
 }
